@@ -1,0 +1,11 @@
+# Raw data files - too large for GitHub
+data/raw/
+
+# Python
+__pycache__/
+*.pyc
+.env
+
+# Azure credentials
+*.json
+!pipeline/adf_templates/*.json
