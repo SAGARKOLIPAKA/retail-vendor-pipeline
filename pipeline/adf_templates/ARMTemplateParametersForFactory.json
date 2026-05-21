@@ -1,0 +1,24 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentParameters.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "factoryName": {
+            "value": "retail-vendor-adf"
+        },
+        "ls_blob_bronze_connectionString": {
+            "value": ""
+        },
+        "ls_sql_database_password": {
+            "value": ""
+        },
+        "ls_sql_database_properties_typeProperties_server": {
+            "value": "retailvendorsrv2026.database.windows.net"
+        },
+        "ls_sql_database_properties_typeProperties_database": {
+            "value": "retail-vendor-db"
+        },
+        "ls_sql_database_properties_typeProperties_userName": {
+            "value": "sqladmin"
+        }
+    }
+}

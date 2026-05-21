@@ -1,0 +1,1203 @@
+{
+    "$schema": "http://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "factoryName": {
+            "type": "string",
+            "metadata": "Data Factory name",
+            "defaultValue": "retail-vendor-adf"
+        },
+        "ls_blob_bronze_connectionString": {
+            "type": "secureString",
+            "metadata": "Secure string for 'connectionString' of 'ls_blob_bronze'"
+        },
+        "ls_sql_database_password": {
+            "type": "secureString",
+            "metadata": "Secure string for 'password' of 'ls_sql_database'"
+        },
+        "ls_sql_database_properties_typeProperties_server": {
+            "type": "string",
+            "defaultValue": "retailvendorsrv2026.database.windows.net"
+        },
+        "ls_sql_database_properties_typeProperties_database": {
+            "type": "string",
+            "defaultValue": "retail-vendor-db"
+        },
+        "ls_sql_database_properties_typeProperties_userName": {
+            "type": "string",
+            "defaultValue": "sqladmin"
+        }
+    },
+    "variables": {
+        "factoryId": "[concat('Microsoft.DataFactory/factories/', parameters('factoryName'))]"
+    },
+    "resources": [
+        {
+            "name": "[concat(parameters('factoryName'), '/ls_blob_bronze')]",
+            "type": "Microsoft.DataFactory/factories/linkedServices",
+            "apiVersion": "2018-06-01",
+            "properties": {
+                "annotations": [],
+                "type": "AzureBlobStorage",
+                "typeProperties": {
+                    "connectionString": "[parameters('ls_blob_bronze_connectionString')]"
+                }
+            },
+            "dependsOn": []
+        },
+        {
+            "name": "[concat(parameters('factoryName'), '/ls_sql_database')]",
+            "type": "Microsoft.DataFactory/factories/linkedServices",
+            "apiVersion": "2018-06-01",
+            "properties": {
+                "annotations": [],
+                "type": "AzureSqlDatabase",
+                "typeProperties": {
+                    "server": "[parameters('ls_sql_database_properties_typeProperties_server')]",
+                    "database": "[parameters('ls_sql_database_properties_typeProperties_database')]",
+                    "encrypt": "mandatory",
+                    "trustServerCertificate": false,
+                    "authenticationType": "SQL",
+                    "userName": "[parameters('ls_sql_database_properties_typeProperties_userName')]",
+                    "password": {
+                        "type": "SecureString",
+                        "value": "[parameters('ls_sql_database_password')]"
+                    }
+                }
+            },
+            "dependsOn": []
+        },
+        {
+            "name": "[concat(parameters('factoryName'), '/df_top_vendors')]",
+            "type": "Microsoft.DataFactory/factories/dataflows",
+            "apiVersion": "2018-06-01",
+            "properties": {
+                "type": "MappingDataFlow",
+                "typeProperties": {
+                    "sources": [
+                        {
+                            "dataset": {
+                                "referenceName": "ds_purchases",
+                                "type": "DatasetReference"
+                            },
+                            "name": "purchases"
+                        }
+                    ],
+                    "sinks": [
+                        {
+                            "dataset": {
+                                "referenceName": "ds_gold_top_vendors",
+                                "type": "DatasetReference"
+                            },
+                            "name": "sinkTopVendors"
+                        }
+                    ],
+                    "transformations": [
+                        {
+                            "name": "aggTopVendors"
+                        }
+                    ],
+                    "scriptLines": [
+                        "source(output(",
+                        "          InventoryId as string,",
+                        "          Store as string,",
+                        "          Brand as string,",
+                        "          Description as string,",
+                        "          Size as string,",
+                        "          VendorNumber as string,",
+                        "          VendorName as string,",
+                        "          PONumber as string,",
+                        "          PODate as string,",
+                        "          ReceivingDate as string,",
+                        "          InvoiceDate as string,",
+                        "          PayDate as string,",
+                        "          PurchasePrice as string,",
+                        "          Quantity as string,",
+                        "          Dollars as string,",
+                        "          Classification as string",
+                        "     ),",
+                        "     allowSchemaDrift: true,",
+                        "     validateSchema: false,",
+                        "     ignoreNoFilesFound: false) ~> purchases",
+                        "purchases aggregate(groupBy(VendorNumber,",
+                        "          VendorName),",
+                        "     TotalPurchaseDollars = sum(toDouble(Dollars)),",
+                        "          {TotalQuantity } = sum(toInteger(Quantity)),",
+                        "          {AvgPurchasePrice } = avg(toDouble(PurchasePrice))) ~> aggTopVendors",
+                        "aggTopVendors sink(allowSchemaDrift: true,",
+                        "     validateSchema: false,",
+                        "     input(",
+                        "          VendorNumber as integer,",
+                        "          VendorName as string,",
+                        "          TotalPurchaseDollars as double,",
+                        "          TotalQuantity as integer,",
+                        "          AvgPurchasePrice as double",
+                        "     ),",
+                        "     deletable:false,",
+                        "     insertable:true,",
+                        "     updateable:false,",
+                        "     upsertable:false,",
+                        "     truncate:true,",
+                        "     format: 'table',",
+                        "     skipDuplicateMapInputs: true,",
+                        "     skipDuplicateMapOutputs: true,",
+                        "     errorHandlingOption: 'stopOnFirstError') ~> sinkTopVendors"
+                    ]
+                }
+            },
+            "dependsOn": [
+                "[concat(variables('factoryId'), '/datasets/ds_purchases')]",
+                "[concat(variables('factoryId'), '/datasets/ds_gold_top_vendors')]"
+            ]
+        },
+        {
+            "name": "[concat(parameters('factoryName'), '/df_vendor_sales_contribution')]",
+            "type": "Microsoft.DataFactory/factories/dataflows",
+            "apiVersion": "2018-06-01",
+            "properties": {
+                "type": "MappingDataFlow",
+                "typeProperties": {
+                    "sources": [
+                        {
+                            "dataset": {
+                                "referenceName": "ds_sales",
+                                "type": "DatasetReference"
+                            },
+                            "name": "sales"
+                        }
+                    ],
+                    "sinks": [
+                        {
+                            "dataset": {
+                                "referenceName": "ds_gold_vendor_sales_contribution",
+                                "type": "DatasetReference"
+                            },
+                            "name": "sinkSalesContribution"
+                        }
+                    ],
+                    "transformations": [
+                        {
+                            "name": "aggSalesContribution"
+                        },
+                        {
+                            "name": "calcContribution"
+                        }
+                    ],
+                    "scriptLines": [
+                        "source(output(",
+                        "          InventoryId as string,",
+                        "          Store as string,",
+                        "          Brand as string,",
+                        "          Description as string,",
+                        "          Size as string,",
+                        "          SalesQuantity as string,",
+                        "          SalesDollars as string,",
+                        "          SalesPrice as string,",
+                        "          SalesDate as string,",
+                        "          Volume as string,",
+                        "          Classification as string,",
+                        "          ExciseTax as string,",
+                        "          VendorNo as string,",
+                        "          VendorName as string",
+                        "     ),",
+                        "     allowSchemaDrift: true,",
+                        "     validateSchema: false,",
+                        "     ignoreNoFilesFound: false) ~> sales",
+                        "sales aggregate(groupBy(VendorNo,",
+                        "          VendorName),",
+                        "     TotalSalesDollars = sum(toDouble(SalesDollars))) ~> aggSalesContribution",
+                        "aggSalesContribution derive(SalesContributionPct = toDouble(TotalSalesDollars) * 100) ~> calcContribution",
+                        "calcContribution sink(allowSchemaDrift: true,",
+                        "     validateSchema: false,",
+                        "     input(",
+                        "          VendorNumber as integer,",
+                        "          VendorName as string,",
+                        "          TotalSalesDollars as double,",
+                        "          SalesContributionPct as double",
+                        "     ),",
+                        "     deletable:false,",
+                        "     insertable:true,",
+                        "     updateable:false,",
+                        "     upsertable:false,",
+                        "     truncate:true,",
+                        "     format: 'table',",
+                        "     skipDuplicateMapInputs: true,",
+                        "     skipDuplicateMapOutputs: true,",
+                        "     errorHandlingOption: 'stopOnFirstError') ~> sinkSalesContribution"
+                    ]
+                }
+            },
+            "dependsOn": [
+                "[concat(variables('factoryId'), '/datasets/ds_sales')]",
+                "[concat(variables('factoryId'), '/datasets/ds_gold_vendor_sales_contribution')]"
+            ]
+        },
+        {
+            "name": "[concat(parameters('factoryName'), '/df_inventory_gap')]",
+            "type": "Microsoft.DataFactory/factories/dataflows",
+            "apiVersion": "2018-06-01",
+            "properties": {
+                "type": "MappingDataFlow",
+                "typeProperties": {
+                    "sources": [
+                        {
+                            "dataset": {
+                                "referenceName": "ds_begin_inventory",
+                                "type": "DatasetReference"
+                            },
+                            "name": "beginInventory"
+                        },
+                        {
+                            "dataset": {
+                                "referenceName": "ds_end_inventory",
+                                "type": "DatasetReference"
+                            },
+                            "name": "endInventory"
+                        }
+                    ],
+                    "sinks": [
+                        {
+                            "dataset": {
+                                "referenceName": "ds_gold_inventory_gap",
+                                "type": "DatasetReference"
+                            },
+                            "name": "sinkInventoryGap"
+                        }
+                    ],
+                    "transformations": [
+                        {
+                            "name": "joinInventory"
+                        },
+                        {
+                            "name": "calcInventoryGap"
+                        }
+                    ],
+                    "scriptLines": [
+                        "source(output(",
+                        "          InventoryId as string,",
+                        "          Store as string,",
+                        "          City as string,",
+                        "          Brand as string,",
+                        "          Description as string,",
+                        "          Size as string,",
+                        "          onHand as string,",
+                        "          Price as string,",
+                        "          startDate as string",
+                        "     ),",
+                        "     allowSchemaDrift: true,",
+                        "     validateSchema: false,",
+                        "     ignoreNoFilesFound: false) ~> beginInventory",
+                        "source(output(",
+                        "          InventoryId as string,",
+                        "          Store as string,",
+                        "          City as string,",
+                        "          Brand as string,",
+                        "          Description as string,",
+                        "          Size as string,",
+                        "          onHand as string,",
+                        "          Price as string,",
+                        "          endDate as string",
+                        "     ),",
+                        "     allowSchemaDrift: true,",
+                        "     validateSchema: false,",
+                        "     ignoreNoFilesFound: false) ~> endInventory",
+                        "beginInventory, endInventory join(beginInventory@InventoryId == endInventory@InventoryId",
+                        "     && beginInventory@Store == endInventory@Store,",
+                        "     joinType:'inner',",
+                        "     matchType:'exact',",
+                        "     ignoreSpaces: false,",
+                        "     broadcast: 'auto')~> joinInventory",
+                        "joinInventory derive(InventoryGap = toInteger(endInventory@onHand) - toInteger(beginInventory@onHand)) ~> calcInventoryGap",
+                        "calcInventoryGap sink(allowSchemaDrift: true,",
+                        "     validateSchema: false,",
+                        "     input(",
+                        "          InventoryId as string,",
+                        "          Store as integer,",
+                        "          Brand as integer,",
+                        "          Description as string,",
+                        "          BeginOnHand as integer,",
+                        "          EndOnHand as integer,",
+                        "          InventoryGap as integer",
+                        "     ),",
+                        "     deletable:false,",
+                        "     insertable:true,",
+                        "     updateable:false,",
+                        "     upsertable:false,",
+                        "     truncate:true,",
+                        "     format: 'table',",
+                        "     skipDuplicateMapInputs: true,",
+                        "     skipDuplicateMapOutputs: true,",
+                        "     errorHandlingOption: 'stopOnFirstError') ~> sinkInventoryGap"
+                    ]
+                }
+            },
+            "dependsOn": [
+                "[concat(variables('factoryId'), '/datasets/ds_begin_inventory')]",
+                "[concat(variables('factoryId'), '/datasets/ds_end_inventory')]",
+                "[concat(variables('factoryId'), '/datasets/ds_gold_inventory_gap')]"
+            ]
+        },
+        {
+            "name": "[concat(parameters('factoryName'), '/df_invoice_reconciliation')]",
+            "type": "Microsoft.DataFactory/factories/dataflows",
+            "apiVersion": "2018-06-01",
+            "properties": {
+                "type": "MappingDataFlow",
+                "typeProperties": {
+                    "sources": [
+                        {
+                            "dataset": {
+                                "referenceName": "ds_purchases",
+                                "type": "DatasetReference"
+                            },
+                            "name": "purchases2"
+                        },
+                        {
+                            "dataset": {
+                                "referenceName": "ds_vendor_invoice",
+                                "type": "DatasetReference"
+                            },
+                            "name": "vendorInvoice"
+                        }
+                    ],
+                    "sinks": [
+                        {
+                            "dataset": {
+                                "referenceName": "ds_gold_invoice_reconciliation",
+                                "type": "DatasetReference"
+                            },
+                            "name": "sinkReconciliation"
+                        }
+                    ],
+                    "transformations": [
+                        {
+                            "name": "joinInvoice"
+                        },
+                        {
+                            "name": "aggReconciliation"
+                        }
+                    ],
+                    "scriptLines": [
+                        "source(output(",
+                        "          InventoryId as string,",
+                        "          Store as string,",
+                        "          Brand as string,",
+                        "          Description as string,",
+                        "          Size as string,",
+                        "          VendorNumber as string,",
+                        "          VendorName as string,",
+                        "          PONumber as string,",
+                        "          PODate as string,",
+                        "          ReceivingDate as string,",
+                        "          InvoiceDate as string,",
+                        "          PayDate as string,",
+                        "          PurchasePrice as string,",
+                        "          Quantity as string,",
+                        "          Dollars as string,",
+                        "          Classification as string",
+                        "     ),",
+                        "     allowSchemaDrift: true,",
+                        "     validateSchema: false,",
+                        "     ignoreNoFilesFound: false) ~> purchases2",
+                        "source(output(",
+                        "          VendorNumber as string,",
+                        "          VendorName as string,",
+                        "          InvoiceDate as string,",
+                        "          PONumber as string,",
+                        "          PODate as string,",
+                        "          PayDate as string,",
+                        "          Quantity as string,",
+                        "          Dollars as string,",
+                        "          Freight as string,",
+                        "          Approval as string",
+                        "     ),",
+                        "     allowSchemaDrift: true,",
+                        "     validateSchema: false,",
+                        "     ignoreNoFilesFound: false) ~> vendorInvoice",
+                        "purchases2, vendorInvoice join(purchases2@PONumber == vendorInvoice@PONumber,",
+                        "     joinType:'inner',",
+                        "     matchType:'exact',",
+                        "     ignoreSpaces: false,",
+                        "     broadcast: 'auto')~> joinInvoice",
+                        "joinInvoice aggregate(groupBy(purchases2@VendorNumber,",
+                        "          purchases2@VendorName,",
+                        "          purchases2@PONumber),",
+                        "     PurchaseDollars = sum(toDouble(purchases2@Dollars)),",
+                        "          InvoiceDollars = sum(toDouble(vendorInvoice@Dollars)),",
+                        "          Variance = sum(toDouble(purchases2@Dollars)) - sum(toDouble(vendorInvoice@Dollars))) ~> aggReconciliation",
+                        "aggReconciliation sink(allowSchemaDrift: true,",
+                        "     validateSchema: false,",
+                        "     input(",
+                        "          VendorNumber as integer,",
+                        "          VendorName as string,",
+                        "          PONumber as integer,",
+                        "          PurchaseDollars as double,",
+                        "          InvoiceDollars as double,",
+                        "          Variance as double",
+                        "     ),",
+                        "     deletable:false,",
+                        "     insertable:true,",
+                        "     updateable:false,",
+                        "     upsertable:false,",
+                        "     truncate:true,",
+                        "     format: 'table',",
+                        "     skipDuplicateMapInputs: true,",
+                        "     skipDuplicateMapOutputs: true,",
+                        "     errorHandlingOption: 'stopOnFirstError') ~> sinkReconciliation"
+                    ]
+                }
+            },
+            "dependsOn": [
+                "[concat(variables('factoryId'), '/datasets/ds_purchases')]",
+                "[concat(variables('factoryId'), '/datasets/ds_vendor_invoice')]",
+                "[concat(variables('factoryId'), '/datasets/ds_gold_invoice_reconciliation')]"
+            ]
+        },
+        {
+            "name": "[concat(parameters('factoryName'), '/df_sales_trend')]",
+            "type": "Microsoft.DataFactory/factories/dataflows",
+            "apiVersion": "2018-06-01",
+            "properties": {
+                "type": "MappingDataFlow",
+                "typeProperties": {
+                    "sources": [
+                        {
+                            "dataset": {
+                                "referenceName": "ds_sales",
+                                "type": "DatasetReference"
+                            },
+                            "name": "sales2"
+                        }
+                    ],
+                    "sinks": [
+                        {
+                            "dataset": {
+                                "referenceName": "ds_gold_sales_trend",
+                                "type": "DatasetReference"
+                            },
+                            "name": "sinkSalesTrend"
+                        }
+                    ],
+                    "transformations": [
+                        {
+                            "name": "extractMonth"
+                        },
+                        {
+                            "name": "aggSalesTrend"
+                        }
+                    ],
+                    "scriptLines": [
+                        "source(output(",
+                        "          InventoryId as string,",
+                        "          Store as string,",
+                        "          Brand as string,",
+                        "          Description as string,",
+                        "          Size as string,",
+                        "          SalesQuantity as string,",
+                        "          SalesDollars as string,",
+                        "          SalesPrice as string,",
+                        "          SalesDate as string,",
+                        "          Volume as string,",
+                        "          Classification as string,",
+                        "          ExciseTax as string,",
+                        "          VendorNo as string,",
+                        "          VendorName as string",
+                        "     ),",
+                        "     allowSchemaDrift: true,",
+                        "     validateSchema: false,",
+                        "     ignoreNoFilesFound: false) ~> sales2",
+                        "sales2 derive(SalesMonth = left(SalesDate, 7)) ~> extractMonth",
+                        "extractMonth aggregate(groupBy(SalesMonth),",
+                        "     TotalSalesDollars = sum(toDouble(SalesDollars)),",
+                        "          TotalQuantity = sum(toInteger(SalesQuantity)),",
+                        "          AvgSalesPrice = avg(toDouble(SalesPrice))) ~> aggSalesTrend",
+                        "aggSalesTrend sink(allowSchemaDrift: true,",
+                        "     validateSchema: false,",
+                        "     input(",
+                        "          SalesMonth as string,",
+                        "          TotalSalesDollars as double,",
+                        "          TotalQuantity as integer,",
+                        "          AvgSalesPrice as double",
+                        "     ),",
+                        "     deletable:false,",
+                        "     insertable:true,",
+                        "     updateable:false,",
+                        "     upsertable:false,",
+                        "     truncate:true,",
+                        "     format: 'table',",
+                        "     skipDuplicateMapInputs: true,",
+                        "     skipDuplicateMapOutputs: true,",
+                        "     errorHandlingOption: 'stopOnFirstError') ~> sinkSalesTrend"
+                    ]
+                }
+            },
+            "dependsOn": [
+                "[concat(variables('factoryId'), '/datasets/ds_sales')]",
+                "[concat(variables('factoryId'), '/datasets/ds_gold_sales_trend')]"
+            ]
+        },
+        {
+            "name": "[concat(parameters('factoryName'), '/ds_purchases')]",
+            "type": "Microsoft.DataFactory/factories/datasets",
+            "apiVersion": "2018-06-01",
+            "properties": {
+                "linkedServiceName": {
+                    "referenceName": "ls_blob_bronze",
+                    "type": "LinkedServiceReference"
+                },
+                "annotations": [],
+                "type": "DelimitedText",
+                "typeProperties": {
+                    "location": {
+                        "type": "AzureBlobStorageLocation",
+                        "fileName": "purchases.csv",
+                        "folderPath": "raw",
+                        "container": "bronze"
+                    },
+                    "columnDelimiter": ",",
+                    "escapeChar": "\\",
+                    "firstRowAsHeader": true,
+                    "quoteChar": "\""
+                },
+                "schema": [
+                    {
+                        "name": "InventoryId",
+                        "type": "String"
+                    },
+                    {
+                        "name": "Store",
+                        "type": "String"
+                    },
+                    {
+                        "name": "Brand",
+                        "type": "String"
+                    },
+                    {
+                        "name": "Description",
+                        "type": "String"
+                    },
+                    {
+                        "name": "Size",
+                        "type": "String"
+                    },
+                    {
+                        "name": "VendorNumber",
+                        "type": "String"
+                    },
+                    {
+                        "name": "VendorName",
+                        "type": "String"
+                    },
+                    {
+                        "name": "PONumber",
+                        "type": "String"
+                    },
+                    {
+                        "name": "PODate",
+                        "type": "String"
+                    },
+                    {
+                        "name": "ReceivingDate",
+                        "type": "String"
+                    },
+                    {
+                        "name": "InvoiceDate",
+                        "type": "String"
+                    },
+                    {
+                        "name": "PayDate",
+                        "type": "String"
+                    },
+                    {
+                        "name": "PurchasePrice",
+                        "type": "String"
+                    },
+                    {
+                        "name": "Quantity",
+                        "type": "String"
+                    },
+                    {
+                        "name": "Dollars",
+                        "type": "String"
+                    },
+                    {
+                        "name": "Classification",
+                        "type": "String"
+                    }
+                ]
+            },
+            "dependsOn": [
+                "[concat(variables('factoryId'), '/linkedServices/ls_blob_bronze')]"
+            ]
+        },
+        {
+            "name": "[concat(parameters('factoryName'), '/ds_gold_top_vendors')]",
+            "type": "Microsoft.DataFactory/factories/datasets",
+            "apiVersion": "2018-06-01",
+            "properties": {
+                "linkedServiceName": {
+                    "referenceName": "ls_sql_database",
+                    "type": "LinkedServiceReference"
+                },
+                "annotations": [],
+                "type": "AzureSqlTable",
+                "schema": [
+                    {
+                        "name": "VendorNumber",
+                        "type": "int",
+                        "precision": 10
+                    },
+                    {
+                        "name": "VendorName",
+                        "type": "nvarchar"
+                    },
+                    {
+                        "name": "TotalPurchaseDollars",
+                        "type": "float",
+                        "precision": 15
+                    },
+                    {
+                        "name": "TotalQuantity",
+                        "type": "int",
+                        "precision": 10
+                    },
+                    {
+                        "name": "AvgPurchasePrice",
+                        "type": "float",
+                        "precision": 15
+                    }
+                ],
+                "typeProperties": {
+                    "schema": "dbo",
+                    "table": "gold_top_vendors"
+                }
+            },
+            "dependsOn": [
+                "[concat(variables('factoryId'), '/linkedServices/ls_sql_database')]"
+            ]
+        },
+        {
+            "name": "[concat(parameters('factoryName'), '/ds_sales')]",
+            "type": "Microsoft.DataFactory/factories/datasets",
+            "apiVersion": "2018-06-01",
+            "properties": {
+                "linkedServiceName": {
+                    "referenceName": "ls_blob_bronze",
+                    "type": "LinkedServiceReference"
+                },
+                "annotations": [],
+                "type": "DelimitedText",
+                "typeProperties": {
+                    "location": {
+                        "type": "AzureBlobStorageLocation",
+                        "fileName": "sales.csv",
+                        "folderPath": "raw",
+                        "container": "bronze"
+                    },
+                    "columnDelimiter": ",",
+                    "escapeChar": "\\",
+                    "firstRowAsHeader": true,
+                    "quoteChar": "\""
+                },
+                "schema": [
+                    {
+                        "name": "InventoryId",
+                        "type": "String"
+                    },
+                    {
+                        "name": "Store",
+                        "type": "String"
+                    },
+                    {
+                        "name": "Brand",
+                        "type": "String"
+                    },
+                    {
+                        "name": "Description",
+                        "type": "String"
+                    },
+                    {
+                        "name": "Size",
+                        "type": "String"
+                    },
+                    {
+                        "name": "SalesQuantity",
+                        "type": "String"
+                    },
+                    {
+                        "name": "SalesDollars",
+                        "type": "String"
+                    },
+                    {
+                        "name": "SalesPrice",
+                        "type": "String"
+                    },
+                    {
+                        "name": "SalesDate",
+                        "type": "String"
+                    },
+                    {
+                        "name": "Volume",
+                        "type": "String"
+                    },
+                    {
+                        "name": "Classification",
+                        "type": "String"
+                    },
+                    {
+                        "name": "ExciseTax",
+                        "type": "String"
+                    },
+                    {
+                        "name": "VendorNo",
+                        "type": "String"
+                    },
+                    {
+                        "name": "VendorName",
+                        "type": "String"
+                    }
+                ]
+            },
+            "dependsOn": [
+                "[concat(variables('factoryId'), '/linkedServices/ls_blob_bronze')]"
+            ]
+        },
+        {
+            "name": "[concat(parameters('factoryName'), '/ds_gold_vendor_sales_contribution')]",
+            "type": "Microsoft.DataFactory/factories/datasets",
+            "apiVersion": "2018-06-01",
+            "properties": {
+                "linkedServiceName": {
+                    "referenceName": "ls_sql_database",
+                    "type": "LinkedServiceReference"
+                },
+                "annotations": [],
+                "type": "AzureSqlTable",
+                "schema": [
+                    {
+                        "name": "VendorNumber",
+                        "type": "int",
+                        "precision": 10
+                    },
+                    {
+                        "name": "VendorName",
+                        "type": "nvarchar"
+                    },
+                    {
+                        "name": "TotalSalesDollars",
+                        "type": "float",
+                        "precision": 15
+                    },
+                    {
+                        "name": "SalesContributionPct",
+                        "type": "float",
+                        "precision": 15
+                    }
+                ],
+                "typeProperties": {
+                    "schema": "dbo",
+                    "table": "gold_vendor_sales_contribution"
+                }
+            },
+            "dependsOn": [
+                "[concat(variables('factoryId'), '/linkedServices/ls_sql_database')]"
+            ]
+        },
+        {
+            "name": "[concat(parameters('factoryName'), '/ds_begin_inventory')]",
+            "type": "Microsoft.DataFactory/factories/datasets",
+            "apiVersion": "2018-06-01",
+            "properties": {
+                "linkedServiceName": {
+                    "referenceName": "ls_blob_bronze",
+                    "type": "LinkedServiceReference"
+                },
+                "annotations": [],
+                "type": "DelimitedText",
+                "typeProperties": {
+                    "location": {
+                        "type": "AzureBlobStorageLocation",
+                        "fileName": "begin_inventory.csv",
+                        "folderPath": "raw",
+                        "container": "bronze"
+                    },
+                    "columnDelimiter": ",",
+                    "escapeChar": "\\",
+                    "firstRowAsHeader": true,
+                    "quoteChar": "\""
+                },
+                "schema": [
+                    {
+                        "name": "InventoryId",
+                        "type": "String"
+                    },
+                    {
+                        "name": "Store",
+                        "type": "String"
+                    },
+                    {
+                        "name": "City",
+                        "type": "String"
+                    },
+                    {
+                        "name": "Brand",
+                        "type": "String"
+                    },
+                    {
+                        "name": "Description",
+                        "type": "String"
+                    },
+                    {
+                        "name": "Size",
+                        "type": "String"
+                    },
+                    {
+                        "name": "onHand",
+                        "type": "String"
+                    },
+                    {
+                        "name": "Price",
+                        "type": "String"
+                    },
+                    {
+                        "name": "startDate",
+                        "type": "String"
+                    }
+                ]
+            },
+            "dependsOn": [
+                "[concat(variables('factoryId'), '/linkedServices/ls_blob_bronze')]"
+            ]
+        },
+        {
+            "name": "[concat(parameters('factoryName'), '/ds_gold_inventory_gap')]",
+            "type": "Microsoft.DataFactory/factories/datasets",
+            "apiVersion": "2018-06-01",
+            "properties": {
+                "linkedServiceName": {
+                    "referenceName": "ls_sql_database",
+                    "type": "LinkedServiceReference"
+                },
+                "annotations": [],
+                "type": "AzureSqlTable",
+                "schema": [
+                    {
+                        "name": "InventoryId",
+                        "type": "nvarchar"
+                    },
+                    {
+                        "name": "Store",
+                        "type": "int",
+                        "precision": 10
+                    },
+                    {
+                        "name": "Brand",
+                        "type": "int",
+                        "precision": 10
+                    },
+                    {
+                        "name": "Description",
+                        "type": "nvarchar"
+                    },
+                    {
+                        "name": "BeginOnHand",
+                        "type": "int",
+                        "precision": 10
+                    },
+                    {
+                        "name": "EndOnHand",
+                        "type": "int",
+                        "precision": 10
+                    },
+                    {
+                        "name": "InventoryGap",
+                        "type": "int",
+                        "precision": 10
+                    }
+                ],
+                "typeProperties": {
+                    "schema": "dbo",
+                    "table": "gold_inventory_gap"
+                }
+            },
+            "dependsOn": [
+                "[concat(variables('factoryId'), '/linkedServices/ls_sql_database')]"
+            ]
+        },
+        {
+            "name": "[concat(parameters('factoryName'), '/ds_end_inventory')]",
+            "type": "Microsoft.DataFactory/factories/datasets",
+            "apiVersion": "2018-06-01",
+            "properties": {
+                "linkedServiceName": {
+                    "referenceName": "ls_blob_bronze",
+                    "type": "LinkedServiceReference"
+                },
+                "annotations": [],
+                "type": "DelimitedText",
+                "typeProperties": {
+                    "location": {
+                        "type": "AzureBlobStorageLocation",
+                        "fileName": "end_inventory.csv",
+                        "folderPath": "raw",
+                        "container": "bronze"
+                    },
+                    "columnDelimiter": ",",
+                    "escapeChar": "\\",
+                    "firstRowAsHeader": true,
+                    "quoteChar": "\""
+                },
+                "schema": [
+                    {
+                        "name": "InventoryId",
+                        "type": "String"
+                    },
+                    {
+                        "name": "Store",
+                        "type": "String"
+                    },
+                    {
+                        "name": "City",
+                        "type": "String"
+                    },
+                    {
+                        "name": "Brand",
+                        "type": "String"
+                    },
+                    {
+                        "name": "Description",
+                        "type": "String"
+                    },
+                    {
+                        "name": "Size",
+                        "type": "String"
+                    },
+                    {
+                        "name": "onHand",
+                        "type": "String"
+                    },
+                    {
+                        "name": "Price",
+                        "type": "String"
+                    },
+                    {
+                        "name": "endDate",
+                        "type": "String"
+                    }
+                ]
+            },
+            "dependsOn": [
+                "[concat(variables('factoryId'), '/linkedServices/ls_blob_bronze')]"
+            ]
+        },
+        {
+            "name": "[concat(parameters('factoryName'), '/ds_gold_invoice_reconciliation')]",
+            "type": "Microsoft.DataFactory/factories/datasets",
+            "apiVersion": "2018-06-01",
+            "properties": {
+                "linkedServiceName": {
+                    "referenceName": "ls_sql_database",
+                    "type": "LinkedServiceReference"
+                },
+                "annotations": [],
+                "type": "AzureSqlTable",
+                "schema": [
+                    {
+                        "name": "VendorNumber",
+                        "type": "int",
+                        "precision": 10
+                    },
+                    {
+                        "name": "VendorName",
+                        "type": "nvarchar"
+                    },
+                    {
+                        "name": "PONumber",
+                        "type": "int",
+                        "precision": 10
+                    },
+                    {
+                        "name": "PurchaseDollars",
+                        "type": "float",
+                        "precision": 15
+                    },
+                    {
+                        "name": "InvoiceDollars",
+                        "type": "float",
+                        "precision": 15
+                    },
+                    {
+                        "name": "Variance",
+                        "type": "float",
+                        "precision": 15
+                    }
+                ],
+                "typeProperties": {
+                    "schema": "dbo",
+                    "table": "gold_invoice_reconciliation"
+                }
+            },
+            "dependsOn": [
+                "[concat(variables('factoryId'), '/linkedServices/ls_sql_database')]"
+            ]
+        },
+        {
+            "name": "[concat(parameters('factoryName'), '/ds_vendor_invoice')]",
+            "type": "Microsoft.DataFactory/factories/datasets",
+            "apiVersion": "2018-06-01",
+            "properties": {
+                "linkedServiceName": {
+                    "referenceName": "ls_blob_bronze",
+                    "type": "LinkedServiceReference"
+                },
+                "annotations": [],
+                "type": "DelimitedText",
+                "typeProperties": {
+                    "location": {
+                        "type": "AzureBlobStorageLocation",
+                        "fileName": "vendor_invoice.csv",
+                        "folderPath": "raw",
+                        "container": "bronze"
+                    },
+                    "columnDelimiter": ",",
+                    "escapeChar": "\\",
+                    "firstRowAsHeader": true,
+                    "quoteChar": "\""
+                },
+                "schema": [
+                    {
+                        "name": "VendorNumber",
+                        "type": "String"
+                    },
+                    {
+                        "name": "VendorName",
+                        "type": "String"
+                    },
+                    {
+                        "name": "InvoiceDate",
+                        "type": "String"
+                    },
+                    {
+                        "name": "PONumber",
+                        "type": "String"
+                    },
+                    {
+                        "name": "PODate",
+                        "type": "String"
+                    },
+                    {
+                        "name": "PayDate",
+                        "type": "String"
+                    },
+                    {
+                        "name": "Quantity",
+                        "type": "String"
+                    },
+                    {
+                        "name": "Dollars",
+                        "type": "String"
+                    },
+                    {
+                        "name": "Freight",
+                        "type": "String"
+                    },
+                    {
+                        "name": "Approval",
+                        "type": "String"
+                    }
+                ]
+            },
+            "dependsOn": [
+                "[concat(variables('factoryId'), '/linkedServices/ls_blob_bronze')]"
+            ]
+        },
+        {
+            "name": "[concat(parameters('factoryName'), '/ds_gold_sales_trend')]",
+            "type": "Microsoft.DataFactory/factories/datasets",
+            "apiVersion": "2018-06-01",
+            "properties": {
+                "linkedServiceName": {
+                    "referenceName": "ls_sql_database",
+                    "type": "LinkedServiceReference"
+                },
+                "annotations": [],
+                "type": "AzureSqlTable",
+                "schema": [
+                    {
+                        "name": "SalesMonth",
+                        "type": "nvarchar"
+                    },
+                    {
+                        "name": "TotalSalesDollars",
+                        "type": "float",
+                        "precision": 15
+                    },
+                    {
+                        "name": "TotalQuantity",
+                        "type": "int",
+                        "precision": 10
+                    },
+                    {
+                        "name": "AvgSalesPrice",
+                        "type": "float",
+                        "precision": 15
+                    }
+                ],
+                "typeProperties": {
+                    "schema": "dbo",
+                    "table": "gold_sales_trend"
+                }
+            },
+            "dependsOn": [
+                "[concat(variables('factoryId'), '/linkedServices/ls_sql_database')]"
+            ]
+        },
+        {
+            "name": "[concat(parameters('factoryName'), '/pl_vendor_analytics')]",
+            "type": "Microsoft.DataFactory/factories/pipelines",
+            "apiVersion": "2018-06-01",
+            "properties": {
+                "activities": [
+                    {
+                        "name": "Data flow1",
+                        "type": "ExecuteDataFlow",
+                        "dependsOn": [],
+                        "policy": {
+                            "timeout": "0.12:00:00",
+                            "retry": 0,
+                            "retryIntervalInSeconds": 30,
+                            "secureOutput": false,
+                            "secureInput": false
+                        },
+                        "userProperties": [],
+                        "typeProperties": {
+                            "dataflow": {
+                                "referenceName": "df_top_vendors",
+                                "type": "DataFlowReference",
+                                "parameters": {},
+                                "datasetParameters": {
+                                    "purchases": {},
+                                    "sinkTopVendors": {}
+                                }
+                            },
+                            "staging": {},
+                            "compute": {
+                                "coreCount": 8,
+                                "computeType": "General"
+                            },
+                            "traceLevel": "Fine"
+                        }
+                    }
+                ],
+                "policy": {
+                    "elapsedTimeMetric": {}
+                },
+                "annotations": [],
+                "lastPublishTime": "2026-05-21T00:34:28Z"
+            },
+            "dependsOn": [
+                "[concat(variables('factoryId'), '/dataflows/df_top_vendors')]"
+            ]
+        }
+    ]
+}
