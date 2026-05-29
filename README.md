@@ -75,7 +75,7 @@
 | **Gold Storage** | Azure SQL Database (Free Tier) | Analytics-ready KPI tables |
 | **Infrastructure** | ARM Templates | Pipeline as code |
 | **Version Control** | GitHub | Full commit history |
-| **Visualization** | Power BI Desktop | 5 KPI dashboards connected to Gold layer |
+| **Visualization** | Power BI Service | 5 KPI dashboards — [View Live Report](https://app.powerbi.com/groups/me/reports/66852318-8cee-4a93-99d8-f4bb09901e34/7b9807ca41dae78cf963?experience=power-bi) ||
 ### AWS Equivalents (for reference)
 
 | Azure Service | AWS Equivalent |
@@ -303,7 +303,21 @@ retail-vendor-pipeline/
 └── .gitignore                        # Excludes data/, .env, credentials
 ```
 
----
+--## 📊 Power BI Dashboards
+
+Live dashboards connected directly to Azure SQL Gold tables.
+
+🔗 **[View Live Report on Power BI Service](https://app.powerbi.com/groups/me/reports/66852318-8cee-4a93-99d8-f4bb09901e34/7b9807ca41dae78cf963?experience=power-bi)**
+
+| Dashboard | Chart Type | Key Insight |
+|-----------|-----------|-------------|
+| Sales Trend | Line chart | July 2024 peak — $49.7M |
+| Top Vendors | Bar chart | DIAGEO #1 — $50.9M |
+| Sales Contribution | Pie chart | DIAGEO — 15.21% of revenue |
+| Inventory Gap | Bar chart | Maker's Mark largest gap |
+| Invoice Variance | Bar chart | MILTONS DISTRIBUTING CO largest variance |
+
+> Dashboard file: [`docs/powerbi/retail-vendor-analytics.pbix`](docs/powerbi/retail-vendor-analytics.pbix)-
 
 ## 🚀 Setup & Reproduction
 
