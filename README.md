@@ -75,7 +75,7 @@
 | **Gold Storage** | Azure SQL Database (Free Tier) | Analytics-ready KPI tables |
 | **Infrastructure** | ARM Templates | Pipeline as code |
 | **Version Control** | GitHub | Full commit history |
-
+| **Visualization** | Power BI Desktop | 5 KPI dashboards connected to Gold layer |
 ### AWS Equivalents (for reference)
 
 | Azure Service | AWS Equivalent |
